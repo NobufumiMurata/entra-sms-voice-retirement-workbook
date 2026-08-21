@@ -17,7 +17,7 @@ An Azure Monitor Workbook for finding **observed Microsoft Entra SMS and voice a
 - Authentication-method filter with `Previously satisfied` excluded by default
 - Overall sign-in health and data-quality checks
 
-The workbook uses an exact allowlist for `Text message`, `SMS`, `Phone call`, and `Voice call`. It does **not** classify `Passwordless phone sign-in` as SMS or voice.
+The workbook uses the Microsoft Graph canonical values `SMS` and `Voice`, together with the observed/legacy labels `Text message`, `Phone call`, and `Voice call`. It does **not** classify `Passwordless phone sign-in` as SMS or voice.
 
 ## Important scope distinction
 
@@ -138,6 +138,7 @@ No matching data can also mean that no SMS or voice authentication step occurred
 - [Azure Workbooks overview and access control](https://learn.microsoft.com/azure/azure-monitor/visualize/workbooks-overview)
 - [Integrate Microsoft Entra logs with Azure Monitor logs](https://learn.microsoft.com/entra/identity/monitoring-health/howto-integrate-activity-logs-with-azure-monitor-logs)
 - [SigninLogs table reference](https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs)
+- [Microsoft Graph authenticationDetail resource](https://learn.microsoft.com/graph/api/resources/authenticationdetail?view=graph-rest-beta)
 - [Review Microsoft Entra multifactor authentication events](https://learn.microsoft.com/entra/identity/authentication/howto-mfa-reporting)
 - [Microsoft Entra SMS and voice usage analyzer](https://github.com/microsoft/entra-sms-voice-usage-analyzer)
 
