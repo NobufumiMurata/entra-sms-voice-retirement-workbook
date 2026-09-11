@@ -1,11 +1,20 @@
 [CmdletBinding()]
 param(
     [string]$OutputPath = (Join-Path $PWD "telephony-only-mfa-users.csv"),
+    [switch]$MembersOnly,
+    [Alias("IncludeGuest")]
     [switch]$IncludeGuests,
     [switch]$SkipConnect
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($MembersOnly -and $IncludeGuests) {
+    throw "-MembersOnly and -IncludeGuests can't be used together. Guests are included by default; use -MembersOnly only when intentionally limiting the report."
+}
+if ($IncludeGuests) {
+    Write-Verbose "-IncludeGuests is retained for compatibility. Guests are now included by default."
+}
 
 $requiredModules = @("Microsoft.Graph.Authentication")
 
@@ -46,7 +55,7 @@ do {
 } while ($requestUri)
 
 $candidates = foreach ($user in $registrationDetails) {
-    if (-not $IncludeGuests -and $user.UserType -ne "member") {
+    if ($MembersOnly -and $user.UserType -ne "member") {
         continue
     }
 
@@ -131,8 +140,14 @@ $resolvedOutputPath = [IO.Path]::GetFullPath($OutputPath)
 [pscustomobject]@{
     ReportUsers = $registrationDetails.Count
     TelephonyOnlyMfaCandidates = $candidates.Count
-    IncludedUserTypes = if ($IncludeGuests) { "member,guest" } else { "member" }
+    IncludedUserTypes = if ($MembersOnly) { "member" } else { "member,guest" }
     OutputPath = $resolvedOutputPath
 } | Format-List
 
-Write-Warning "This report identifies enabled users with a registered phone method and no other registered strong method. Confirm Authentication Methods Policy scope and recent SigninLogs usage before taking action."
+$guestWarning = if ($MembersOnly) {
+    ""
+}
+else {
+    " For guests, the resource-tenant report might not show methods registered in the home tenant. Confirm home-tenant MFA and cross-tenant MFA trust."
+}
+Write-Warning "This report identifies enabled users with a registered phone method and no other registered strong method.$guestWarning Confirm Authentication Methods Policy scope and recent SigninLogs usage before taking action."

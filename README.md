@@ -61,7 +61,8 @@ Important limitations:
 
 - A registered `mobilePhone` can support SMS, voice, or both depending on policy. Registration data alone doesn't prove which channel the user normally uses.
 - The registration report doesn't return disabled users.
-- Guests are excluded by default because their MFA might be performed in a home tenant. Use `-IncludeGuests` only for a separate review.
+- Members and guests are included by default because B2B and internal guest users are in scope for the retirement. Use `-MembersOnly` only when intentionally creating a separate Member report.
+- For guests, the resource-tenant registration report might not show authentication methods registered or used in the home tenant. Review the home tenant and cross-tenant MFA trust before concluding that a guest has no alternative method.
 - The script doesn't export phone numbers, tokens, or secrets.
 - A candidate is not necessarily impacted if a supported customer-managed telephony provider is configured. Confirm current policy and provider state.
 
