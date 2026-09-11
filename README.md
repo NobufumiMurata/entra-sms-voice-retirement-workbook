@@ -1,12 +1,38 @@
-# Microsoft Entra SMS / Voice Retirement Readiness Workbook
+# Microsoft Entra SMS / Voice Retirement Readiness Toolkit
+
+A small toolkit for identifying users and authentication activity that might be affected when Microsoft-provided SMS and voice delivery retires on **February 1, 2027**.
+
+It combines current authentication-method registration data from Microsoft Graph with observed SMS and voice use from Log Analytics `SigninLogs`.
+
+日本語: Microsoft EntraのSMS／音声認証廃止に備え、**電話方式しかMFA登録していないユーザー候補を抽出するPowerShell**と、`SigninLogs.AuthenticationDetails`から**実際のSMS／音声利用状況を可視化するAzure Monitor Workbook**をセットで提供します。
+
+## Included tools
+
+| Tool | Data source | Answers |
+| --- | --- | --- |
+| [`Export-TelephonyOnlyMfaUsers.ps1`](Export-TelephonyOnlyMfaUsers.ps1) | Microsoft Graph `userRegistrationDetails` | Who has a registered phone method but no other registered strong MFA method? |
+| Azure Monitor Workbook (`azuredeploy.json`) | Log Analytics `SigninLogs` | Who actually used SMS or voice, when, and with what result? |
+
+Use both outputs together with the [Microsoft Entra SMS and voice usage analyzer](https://github.com/microsoft/entra-sms-voice-usage-analyzer), which provides current policy targeting and registration-campaign state.
+
+## Quick start
+
+### 1. Export telephony-only MFA registration candidates
+
+```powershell
+Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
+
+./Export-TelephonyOnlyMfaUsers.ps1 `
+   -OutputPath ./telephony-only-mfa-users.csv
+```
+
+Members and guests are included by default. Use `-MembersOnly` only for an intentionally Member-only report.
+
+### 2. Deploy the observed-usage Workbook
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FNobufumiMurata%2Fentra-sms-voice-retirement-workbook%2Fmain%2Fazuredeploy.json)
 
-An Azure Monitor Workbook for finding **observed Microsoft Entra SMS and voice authentication use** in Log Analytics `SigninLogs` before Microsoft-provided SMS and voice delivery retires on **February 1, 2027**.
-
-日本語: Microsoft Entra の `SigninLogs.AuthenticationDetails` を使い、SMS / 音声認証の実利用ユーザー、認証ステップ、最終利用日、推移、データ重複を可視化する Azure Monitor Workbook です。
-
-## What the workbook shows
+## What the Workbook shows
 
 - Observed SMS / voice users
 - Deduplicated authentication steps and raw log rows
@@ -19,26 +45,30 @@ An Azure Monitor Workbook for finding **observed Microsoft Entra SMS and voice a
 
 The workbook uses the Microsoft Graph canonical values `SMS` and `Voice`, together with the observed/legacy labels `Text message`, `Phone call`, and `Voice call`. It does **not** classify `Passwordless phone sign-in` as SMS or voice.
 
-## Important scope distinction
+## How the tools fit together
 
-This workbook answers:
+Each component answers a different question:
 
-> Who actually used SMS or voice during the retained `SigninLogs` period?
+- **PowerShell export:** Who has a phone method but no other registered strong MFA method?
+- **Official analyzer:** Who is targeted by the current SMS / Voice policies?
+- **Workbook:** Who actually used SMS or voice during the retained `SigninLogs` period?
 
-It does **not** determine current Authentication Methods Policy scope or all users who have registered a phone method. Use it together with:
+No single component proves final impact by itself. Use them together with:
 
 - [Microsoft Entra SMS and voice usage analyzer](https://github.com/microsoft/entra-sms-voice-usage-analyzer) for current policy state, include/exclude targets, registration campaign state, and target CSV.
 - [Authentication Methods Activity](https://learn.microsoft.com/entra/identity/authentication/howto-authentication-methods-activity) when registered-method and passwordless-capability information is required.
 - [`Export-TelephonyOnlyMfaUsers.ps1`](Export-TelephonyOnlyMfaUsers.ps1) to export enabled users who have a registered phone method but no other registered strong authentication method.
 
-| Analyzer policy target | Workbook observed use | Suggested interpretation |
-| --- | --- | --- |
-| Yes | Yes | Highest migration priority |
-| Yes | No | Potential impact even without recent use |
-| No | Yes | Review policy changes and last-use time |
-| No | No | No current evidence; continue periodic review |
+| Telephony-only registration | Analyzer policy target | Workbook observed use | Suggested interpretation |
+| --- | --- | --- | --- |
+| Yes | Yes | Yes | Highest migration priority |
+| Yes | Yes | No | Impact candidate without recent observed use |
+| Yes | No | Any | Review policy targeting and provider plans |
+| No | Yes | Yes | Active user with another registered strong method; migrate preferred use |
+| No | Yes | No | Policy target, but no current telephony-only registration evidence |
+| No | No | No | No current evidence; continue periodic review |
 
-## Export telephony-only MFA candidates
+## How the PowerShell export works
 
 The included PowerShell script uses the Microsoft Graph `userRegistrationDetails` report to find enabled users who:
 
@@ -75,7 +105,7 @@ Telephony-only registration
    AND no applicable customer-managed provider
 ```
 
-## Prerequisites
+## Workbook prerequisites
 
 1. An Azure subscription and an existing Log Analytics workspace.
 2. Microsoft Entra `SigninLogs` routed to that workspace:
@@ -87,7 +117,7 @@ Telephony-only registration
 
 New diagnostic settings can take time to populate the workspace. Existing Log Analytics retention determines how far back the workbook can query.
 
-## Deploy with the Azure portal
+## Deploy the Workbook with the Azure portal
 
 1. Select **Deploy to Azure** above.
 2. Select the subscription and resource group where the Workbook resource will be stored.
@@ -109,7 +139,7 @@ Direct Workbook Viewer deep links can vary by portal context. The stable access 
 | `workbookLocation` | Yes | Deployment resource-group location | Workbook resource location |
 | `workbookCategory` | Yes | `workbook` | Use `sentinel` for the Sentinel gallery |
 
-## Deploy with Azure CLI
+## Deploy the Workbook with Azure CLI
 
 ```bash
 az deployment group create \
@@ -124,7 +154,7 @@ az deployment group create \
 
 To update an existing Workbook instead of creating a new deterministic resource, pass its GUID as `workbookId`.
 
-## Query model
+## Workbook query model
 
 A single authentication step can appear in multiple `SigninLogs` rows. The workbook therefore does not treat raw row count as authentication count. It uses a distinct key based on:
 
@@ -143,11 +173,12 @@ The template contains 13 Workbook items, 7 KQL queries, and 2 parameters:
 
 - The template contains no tenant ID, subscription ID, workspace ID, user identity, phone number, token, secret, or password.
 - The Workbook does not call Microsoft Graph at runtime and requires no Graph application permissions.
+- The PowerShell script requests delegated `AuditLog.Read.All` and exports registration metadata, but it doesn't retrieve phone numbers.
 - Query results can display user principal names and display names from `SigninLogs`. Restrict Workbook and workspace access with Azure RBAC.
 - Exported user tables and analyzer CSV files can contain personal data. Store them outside source control and protect them according to organizational policy.
 - The Workbook never displays phone numbers, OTP values, access tokens, or client secrets.
 
-## Troubleshooting
+## Workbook troubleshooting
 
 ### No data
 
