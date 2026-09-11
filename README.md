@@ -29,6 +29,7 @@ It does **not** determine current Authentication Methods Policy scope or all use
 
 - [Microsoft Entra SMS and voice usage analyzer](https://github.com/microsoft/entra-sms-voice-usage-analyzer) for current policy state, include/exclude targets, registration campaign state, and target CSV.
 - [Authentication Methods Activity](https://learn.microsoft.com/entra/identity/authentication/howto-authentication-methods-activity) when registered-method and passwordless-capability information is required.
+- [`Export-TelephonyOnlyMfaUsers.ps1`](Export-TelephonyOnlyMfaUsers.ps1) to export enabled users who have a registered phone method but no other registered strong authentication method.
 
 | Analyzer policy target | Workbook observed use | Suggested interpretation |
 | --- | --- | --- |
@@ -36,6 +37,42 @@ It does **not** determine current Authentication Methods Policy scope or all use
 | Yes | No | Potential impact even without recent use |
 | No | Yes | Review policy changes and last-use time |
 | No | No | No current evidence; continue periodic review |
+
+## Export telephony-only MFA candidates
+
+The included PowerShell script uses the Microsoft Graph `userRegistrationDetails` report to find enabled users who:
+
+1. Are registered for MFA.
+2. Have `mobilePhone`, `alternateMobilePhone`, or `officePhone` registered.
+3. Have no other registered strong method, such as Microsoft Authenticator, software/hardware OATH, passkey, Windows Hello for Business, or certificate-based authentication.
+
+Install the required modules and run the script:
+
+```powershell
+Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
+
+./Export-TelephonyOnlyMfaUsers.ps1 `
+   -OutputPath ./telephony-only-mfa-users.csv
+```
+
+The delegated Graph permission is `AuditLog.Read.All`. The signed-in user also needs a supported role, such as Reports Reader, Security Reader, Security Administrator, or Global Reader.
+
+Important limitations:
+
+- A registered `mobilePhone` can support SMS, voice, or both depending on policy. Registration data alone doesn't prove which channel the user normally uses.
+- The registration report doesn't return disabled users.
+- Guests are excluded by default because their MFA might be performed in a home tenant. Use `-IncludeGuests` only for a separate review.
+- The script doesn't export phone numbers, tokens, or secrets.
+- A candidate is not necessarily impacted if a supported customer-managed telephony provider is configured. Confirm current policy and provider state.
+
+For migration planning, intersect the script output with the official analyzer's policy-target CSV, then prioritize users observed in the Workbook:
+
+```text
+Telephony-only registration
+   AND current SMS/Voice policy target
+   AND enabled user
+   AND no applicable customer-managed provider
+```
 
 ## Prerequisites
 
@@ -130,6 +167,7 @@ No matching data can also mean that no SMS or voice authentication step occurred
 ## Files
 
 - `azuredeploy.json` - parameterized ARM template and Workbook content.
+- `Export-TelephonyOnlyMfaUsers.ps1` - exports enabled telephony-only MFA registration candidates to CSV.
 - `LICENSE` - MIT license.
 
 ## Official references
@@ -139,6 +177,8 @@ No matching data can also mean that no SMS or voice authentication step occurred
 - [Integrate Microsoft Entra logs with Azure Monitor logs](https://learn.microsoft.com/entra/identity/monitoring-health/howto-integrate-activity-logs-with-azure-monitor-logs)
 - [SigninLogs table reference](https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs)
 - [Microsoft Graph authenticationDetail resource](https://learn.microsoft.com/graph/api/resources/authenticationdetail?view=graph-rest-beta)
+- [Microsoft Graph userRegistrationDetails resource](https://learn.microsoft.com/graph/api/resources/userregistrationdetails?view=graph-rest-1.0)
+- [List userRegistrationDetails](https://learn.microsoft.com/graph/api/authenticationmethodsroot-list-userregistrationdetails?view=graph-rest-1.0)
 - [Review Microsoft Entra multifactor authentication events](https://learn.microsoft.com/entra/identity/authentication/howto-mfa-reporting)
 - [Microsoft Entra SMS and voice usage analyzer](https://github.com/microsoft/entra-sms-voice-usage-analyzer)
 
